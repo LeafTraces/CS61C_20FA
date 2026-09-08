@@ -19,7 +19,7 @@
 - [x] **Lab 08**: 虚拟内存 (Virtual Memory)
 - [x] **Lab 09**: SIMD介绍 (SIMD Instructions)
 - [x] **Lab 10**: 线程级并行 (Thread-Level Parallelism, OpenMP)
-- [ ] **Lab 11**: Spark/Dependency
+- [x] **Lab 11**: Spark/Dependency
 
 ---
 
