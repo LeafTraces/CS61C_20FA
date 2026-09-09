@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <omp.h>
+#include <string.h>
 
 // Include SSE intrinsics
 #if defined(_MSC_VER)
@@ -108,7 +109,58 @@ int allocate_matrix(matrix **mat, int rows, int cols) {
  */
 int allocate_matrix_ref(matrix **mat, matrix *from, int row_offset, int col_offset,
                         int rows, int cols) {
-    /* TODO: YOUR CODE HERE */
+
+    // Check dimensions
+    if (rows <= 0 || cols <= 0) {
+        PyErr_SetString(PyExc_ValueError,
+                        "rows and cols must be positive");
+        return -1;
+    }
+
+    // Check slice bounds
+    if (from == NULL ||
+        row_offset < 0 ||
+        col_offset < 0 ||
+        rows > from->rows ||
+        cols > from->cols ||
+        row_offset > from->rows - rows ||
+        col_offset > from->cols - cols) {
+
+        PyErr_SetString(PyExc_IndexError,
+                        "slice out of bounds");
+        return -1;
+    }
+
+    matrix *m = malloc(sizeof(matrix));
+    if (m == NULL) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "failed to allocate matrix");
+        return -1;
+    }
+
+    m->data = malloc((size_t) rows * sizeof(double *));
+    if (m->data == NULL) {
+        free(m);
+
+        PyErr_SetString(PyExc_RuntimeError,
+                        "failed to allocate matrix data");
+        return -1;
+    }
+
+    for (int i = 0; i < rows; i++){
+        m->data[i] = from->data[row_offset + i] + col_offset;
+    }
+
+    m->rows = rows;
+    m->cols = cols;
+    m->is_1d = (rows == 1 || cols == 1);
+    m->ref_cnt = 1;
+    m->parent = from;
+
+    from->ref_cnt++;
+    *mat = m;
+
+    return 0;
 }
 
 /*
@@ -119,7 +171,27 @@ int allocate_matrix_ref(matrix **mat, matrix *from, int row_offset, int col_offs
  * See the spec for more information.
  */
 void deallocate_matrix(matrix *mat) {
-    /* TODO: YOUR CODE HERE */
+    if (mat == NULL){
+        return;
+    }
+
+    mat->ref_cnt--;
+
+    if (mat->ref_cnt > 0){
+        return;
+    }
+
+    if (mat->parent == NULL){
+        free(mat->data[0]);
+        free(mat->data);
+        free(mat);
+        return;
+    }
+
+    matrix *parent = mat->parent;
+    free(mat->data);
+    free(mat);
+    deallocate_matrix(parent);
 }
 
 /*
@@ -127,7 +199,7 @@ void deallocate_matrix(matrix *mat) {
  * You may assume `row` and `col` are valid.
  */
 double get(matrix *mat, int row, int col) {
-    /* TODO: YOUR CODE HERE */
+    return mat->data[row][col];
 }
 
 /*
@@ -135,14 +207,22 @@ double get(matrix *mat, int row, int col) {
  * `col` are valid
  */
 void set(matrix *mat, int row, int col, double val) {
-    /* TODO: YOUR CODE HERE */
+    mat->data[row][col] = val;
 }
 
 /*
  * Set all entries in mat to val
  */
 void fill_matrix(matrix *mat, double val) {
-    /* TODO: YOUR CODE HERE */
+    int rows = mat->rows;
+    int cols = mat->cols;
+
+    size_t k = (size_t) rows * (size_t) cols;
+
+    double *element = mat->data[0];
+    for (size_t i = 0; i < k; i++){
+        element[i] = val;
+    }
 }
 
 /*
@@ -150,7 +230,16 @@ void fill_matrix(matrix *mat, double val) {
  * Return 0 upon success and a nonzero value upon failure.
  */
 int add_matrix(matrix *result, matrix *mat1, matrix *mat2) {
-    /* TODO: YOUR CODE HERE */
+    size_t k = (size_t) result->rows * (size_t) result->cols;
+    double *result_e = result->data[0];
+    double *mat1_e = mat1->data[0];
+    double *mat2_e = mat2->data[0];
+
+    for (size_t i = 0; i < k; i++){
+        result_e[i] = mat1_e[i] + mat2_e[i];
+    }
+
+    return 0;
 }
 
 /*
@@ -158,7 +247,16 @@ int add_matrix(matrix *result, matrix *mat1, matrix *mat2) {
  * Return 0 upon success and a nonzero value upon failure.
  */
 int sub_matrix(matrix *result, matrix *mat1, matrix *mat2) {
-    /* TODO: YOUR CODE HERE */
+    size_t k = (size_t) result->rows * (size_t) result->cols;
+    double *result_e = result->data[0];
+    double *mat1_e = mat1->data[0];
+    double *mat2_e = mat2->data[0];
+
+    for (size_t i = 0; i < k; i++){
+        result_e[i] = mat1_e[i] - mat2_e[i];
+    }
+    
+    return 0;
 }
 
 /*
@@ -167,7 +265,17 @@ int sub_matrix(matrix *result, matrix *mat1, matrix *mat2) {
  * Remember that matrix multiplication is not the same as multiplying individual elements.
  */
 int mul_matrix(matrix *result, matrix *mat1, matrix *mat2) {
-    /* TODO: YOUR CODE HERE */
+    for (int i = 0; i < result->rows; i++){
+        for (int j = 0; j < result->cols; j++){
+            double sum = 0;
+            for (int p = 0; p < mat1->cols; p++){
+                sum += mat1->data[i][p] * mat2->data[p][j];
+            }
+            result->data[i][j] = sum;
+        }
+    }
+    
+    return 0;
 }
 
 /*
@@ -176,7 +284,47 @@ int mul_matrix(matrix *result, matrix *mat1, matrix *mat2) {
  * Remember that pow is defined with matrix multiplication, not element-wise multiplication.
  */
 int pow_matrix(matrix *result, matrix *mat, int pow) {
-    /* TODO: YOUR CODE HERE */
+    int n = mat->rows;
+
+    if (mat->rows != mat->cols){
+        PyErr_SetString(PyExc_ValueError,
+                        "rows and cols must be equal");
+        return -1;
+    
+    }
+    
+    if (pow == 0){
+        for (int i = 0; i < n; i++){
+            for (int j = 0; j < n; j++){
+                result->data[i][j] = (i == j) ? 1.0 : 0.0;
+            }
+        }
+        return 0;
+    }
+
+    // acc = I
+    matrix *acc = NULL;
+    allocate_matrix(&acc, n, n);
+    for (int i = 0; i < n; i++){
+        acc->data[i][i] = 1.0;
+    }
+
+    matrix *temp = NULL;
+    allocate_matrix(&temp, n, n);
+    for (int p = 0; p < pow; p++){
+        mul_matrix(temp, acc, mat);
+        
+        matrix *swap = acc;
+        acc = temp;
+        temp = swap;
+    }
+
+    memcpy(result->data[0], acc->data[0], (size_t) n * n * sizeof(double));
+
+    deallocate_matrix(acc);
+    deallocate_matrix(temp);
+
+    return 0;
 }
 
 /*
@@ -184,7 +332,15 @@ int pow_matrix(matrix *result, matrix *mat, int pow) {
  * Return 0 upon success and a nonzero value upon failure.
  */
 int neg_matrix(matrix *result, matrix *mat) {
-    /* TODO: YOUR CODE HERE */
+    size_t k = (size_t) result->rows * (size_t) result->cols;
+    double *result_e = result->data[0];
+    double *mat_e = mat->data[0];
+
+    for (size_t i = 0; i < k; i++){
+        result_e[i] = -mat_e[i];
+    }
+    
+    return 0;
 }
 
 /*
@@ -192,6 +348,14 @@ int neg_matrix(matrix *result, matrix *mat) {
  * Return 0 upon success and a nonzero value upon failure.
  */
 int abs_matrix(matrix *result, matrix *mat) {
-    /* TODO: YOUR CODE HERE */
+    size_t k = (size_t) result->rows * (size_t) result->cols;
+    double *result_e = result->data[0];
+    double *mat_e = mat->data[0];
+
+    for (size_t i = 0; i < k; i++){
+        result_e[i] = mat_e[i] < 0 ? -mat_e[i] : mat_e[i];
+    }
+    
+    return 0;
 }
 
