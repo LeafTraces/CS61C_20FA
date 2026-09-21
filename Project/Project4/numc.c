@@ -287,6 +287,64 @@ PyObject *Matrix61c_repr(PyObject *self) {
  */
 PyObject *Matrix61c_add(Matrix61c* self, PyObject* args) {
     /* TODO: YOUR CODE HERE */
+    if (!PyObject_TypeCheck(args, &Matrix61cType)) {
+    PyErr_SetString(PyExc_TypeError,
+                    "Second operand must be numc.Matrix");
+    return NULL;
+    }
+
+    Matrix61c *other = (Matrix61c *) args;
+
+    if (self->mat->rows != other->mat->rows || self->mat->cols != other->mat->cols){
+        PyErr_SetString(PyExc_ValueError,
+                        "Matrix dimensions must match");
+
+        return NULL;
+    }
+
+    matrix *new_mat;
+    
+    int alloc_failed = allocate_matrix(
+        &new_mat,
+        self->mat->rows,
+        self->mat->cols
+    );
+    if (alloc_failed) return NULL;
+
+    int failed = add_matrix(
+        new_mat, 
+        self->mat, 
+        other->mat
+    );
+    if (failed){
+        deallocate_matrix(new_mat);
+        
+        if (!PyErr_Occurred()){
+            PyErr_SetString(PyExc_RuntimeError,
+            "Matrix addition failed");
+        }
+
+        return NULL;
+    }
+
+    Matrix61c *rv = (Matrix61c *)Matrix61c_new(
+        &Matrix61cType,
+        NULL,
+        NULL
+    );
+
+    if (rv == NULL){
+        deallocate_matrix(new_mat);
+        return NULL;
+    }
+
+    rv->mat = new_mat;
+    rv->shape = get_shape(
+        new_mat->rows,
+        new_mat->cols
+    );
+
+    return (PyObject *)rv;
 }
 
 /*
@@ -295,6 +353,64 @@ PyObject *Matrix61c_add(Matrix61c* self, PyObject* args) {
  */
 PyObject *Matrix61c_sub(Matrix61c* self, PyObject* args) {
     /* TODO: YOUR CODE HERE */
+    if (!PyObject_TypeCheck(args, &Matrix61cType)) {
+    PyErr_SetString(PyExc_TypeError,
+                    "Second operand must be numc.Matrix");
+    return NULL;
+    }
+
+    Matrix61c *other = (Matrix61c *) args;
+
+    if (self->mat->rows != other->mat->rows || self->mat->cols != other->mat->cols){
+        PyErr_SetString(PyExc_ValueError,
+                        "Matrix dimensions must match");
+
+        return NULL;
+    }
+
+    matrix *new_mat;
+    
+    int alloc_failed = allocate_matrix(
+        &new_mat,
+        self->mat->rows,
+        self->mat->cols
+    );
+    if (alloc_failed) return NULL;
+
+    int failed = sub_matrix(
+        new_mat, 
+        self->mat, 
+        other->mat
+    );
+    if (failed){
+        deallocate_matrix(new_mat);
+        
+        if (!PyErr_Occurred()){
+            PyErr_SetString(PyExc_RuntimeError,
+            "Matrix subtraction failed");
+        }
+
+        return NULL;
+    }
+
+    Matrix61c *rv = (Matrix61c *)Matrix61c_new(
+        &Matrix61cType,
+        NULL,
+        NULL
+    );
+
+    if (rv == NULL){
+        deallocate_matrix(new_mat);
+        return NULL;
+    }
+
+    rv->mat = new_mat;
+    rv->shape = get_shape(
+        new_mat->rows,
+        new_mat->cols
+    );
+
+    return (PyObject *)rv;
 }
 
 /*
@@ -303,6 +419,65 @@ PyObject *Matrix61c_sub(Matrix61c* self, PyObject* args) {
  */
 PyObject *Matrix61c_multiply(Matrix61c* self, PyObject *args) {
     /* TODO: YOUR CODE HERE */
+    /* TODO: YOUR CODE HERE */
+    if (!PyObject_TypeCheck(args, &Matrix61cType)) {
+    PyErr_SetString(PyExc_TypeError,
+                    "Second operand must be numc.Matrix");
+    return NULL;
+    }
+
+    Matrix61c *other = (Matrix61c *) args;
+
+    if ( self->mat->cols != other->mat->rows){
+        PyErr_SetString(PyExc_ValueError,
+                        "Matrix dimensions must match");
+
+        return NULL;
+    }
+
+    matrix *new_mat;
+    
+    int alloc_failed = allocate_matrix(
+        &new_mat,
+        self->mat->rows,
+        other->mat->cols
+    );
+    if (alloc_failed) return NULL;
+
+    int failed = mul_matrix(
+        new_mat, 
+        self->mat, 
+        other->mat
+    );
+    if (failed){
+        deallocate_matrix(new_mat);
+        
+        if (!PyErr_Occurred()){
+            PyErr_SetString(PyExc_RuntimeError,
+            "Matrix multiplication failed");
+        }
+
+        return NULL;
+    }
+
+    Matrix61c *rv = (Matrix61c *)Matrix61c_new(
+        &Matrix61cType,
+        NULL,
+        NULL
+    );
+
+    if (rv == NULL){
+        deallocate_matrix(new_mat);
+        return NULL;
+    }
+
+    rv->mat = new_mat;
+    rv->shape = get_shape(
+        new_mat->rows,
+        new_mat->cols
+    );
+
+    return (PyObject *)rv;
 }
 
 /*
@@ -310,6 +485,39 @@ PyObject *Matrix61c_multiply(Matrix61c* self, PyObject *args) {
  */
 PyObject *Matrix61c_neg(Matrix61c* self) {
     /* TODO: YOUR CODE HERE */
+    matrix *new_mat;
+
+    int alloc_failed = allocate_matrix(
+        &new_mat,
+        self->mat->rows,
+        self->mat->cols
+    );
+    if (alloc_failed) return NULL;
+
+    int failed = neg_matrix(new_mat, self->mat);
+
+    if (failed){
+        deallocate_matrix(new_mat);
+        return NULL;
+    }
+
+    Matrix61c *rv = (Matrix61c *)Matrix61c_new(
+        &Matrix61cType,
+        NULL,
+        NULL
+    );
+    if (rv == NULL){
+        deallocate_matrix(new_mat);
+        return NULL;
+    }
+
+    rv->mat = new_mat;
+    rv->shape = get_shape(
+        new_mat->rows,
+        new_mat->cols
+    );
+
+    return (PyObject *)rv;
 }
 
 /*
@@ -317,6 +525,39 @@ PyObject *Matrix61c_neg(Matrix61c* self) {
  */
 PyObject *Matrix61c_abs(Matrix61c *self) {
     /* TODO: YOUR CODE HERE */
+    matrix *new_mat;
+
+    int alloc_failed = allocate_matrix(
+        &new_mat,
+        self->mat->rows,
+        self->mat->cols
+    );
+    if (alloc_failed) return NULL;
+
+    int failed = abs_matrix(new_mat, self->mat);
+
+    if (failed){
+        deallocate_matrix(new_mat);
+        return NULL;
+    }
+
+    Matrix61c *rv = (Matrix61c *)Matrix61c_new(
+        &Matrix61cType,
+        NULL,
+        NULL
+    );
+    if (rv == NULL){
+        deallocate_matrix(new_mat);
+        return NULL;
+    }
+
+    rv->mat = new_mat;
+    rv->shape = get_shape(
+        new_mat->rows,
+        new_mat->cols
+    );
+
+    return (PyObject *)rv;
 }
 
 /*
@@ -324,6 +565,73 @@ PyObject *Matrix61c_abs(Matrix61c *self) {
  */
 PyObject *Matrix61c_pow(Matrix61c *self, PyObject *pow, PyObject *optional) {
     /* TODO: YOUR CODE HERE */
+    if (!PyLong_Check(pow)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "Second operand must be an Integer");
+        return NULL;
+    }
+
+    long exponent = PyLong_AsLong(pow);
+    if (exponent == -1 && PyErr_Occurred()){
+        return NULL;
+    }
+
+    if (self->mat->rows != self->mat->cols){
+        PyErr_SetString(PyExc_ValueError,
+                        "Matrix must be square");
+        return NULL;
+    }
+
+    if (exponent < 0) {
+        PyErr_SetString(PyExc_ValueError,
+                        "Power must be non-negative");
+        return NULL;
+    }
+
+    matrix *new_mat;
+    
+    int alloc_failed = allocate_matrix(
+        &new_mat,
+        self->mat->rows,
+        self->mat->cols
+    );
+    if (alloc_failed) return NULL;
+
+    int failed = pow_matrix(
+        new_mat, 
+        self->mat, 
+        (int)exponent
+    );
+    if (failed){
+        deallocate_matrix(new_mat);
+        
+        if (!PyErr_Occurred()){
+            PyErr_SetString(PyExc_RuntimeError,
+            "Matrix exponentiation failed");
+        }
+
+        return NULL;
+    }
+
+    Matrix61c *rv = (Matrix61c *)Matrix61c_new(
+        &Matrix61cType,
+        NULL,
+        NULL
+    );
+
+    if (rv == NULL){
+        deallocate_matrix(new_mat);
+        return NULL;
+    }
+
+    rv->mat = new_mat;
+
+    rv->shape = get_shape(
+        new_mat->rows,
+        new_mat->cols
+    );
+
+    return (PyObject *)rv;
 }
 
 /*
@@ -332,6 +640,12 @@ PyObject *Matrix61c_pow(Matrix61c *self, PyObject *pow, PyObject *optional) {
  */
 PyNumberMethods Matrix61c_as_number = {
     /* TODO: YOUR CODE HERE */
+    .nb_add = (binaryfunc) Matrix61c_add,
+    .nb_subtract = (binaryfunc) Matrix61c_sub,
+    .nb_multiply = (binaryfunc) Matrix61c_multiply,
+    .nb_negative = (unaryfunc) Matrix61c_neg,
+    .nb_absolute = (unaryfunc) Matrix61c_abs,
+    .nb_power = (ternaryfunc) Matrix61c_pow,
 };
 
 
