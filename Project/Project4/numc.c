@@ -657,6 +657,58 @@ PyNumberMethods Matrix61c_as_number = {
  */
 PyObject *Matrix61c_set_value(Matrix61c *self, PyObject* args) {
     /* TODO: YOUR CODE HERE */
+
+    PyObject *row = NULL;
+    PyObject *col = NULL;
+    PyObject *val = NULL;
+
+    if (!PyArg_UnpackTuple(
+        args,
+        "args",
+        3,
+        3,
+        &row,
+        &col,
+        &val
+    )){
+        PyErr_SetString(PyExc_TypeError,
+                        "set expects three arguments");
+        
+        return NULL;
+    }
+
+    if (!PyLong_Check(row) || !PyLong_Check(col)){
+        PyErr_SetString(PyExc_TypeError,
+                        "row and col must be integers");
+        return NULL;
+    }
+
+    long r = PyLong_AsLong(row);
+    long c = PyLong_AsLong(col);
+
+    double value;
+    if (PyLong_Check(val)){
+        value = (double)PyLong_AsLong(val);
+    }
+    else if (PyFloat_Check(val)){
+        value = PyFloat_AsDouble(val);
+    }
+    else{
+        PyErr_SetString(PyExc_TypeError,
+                        "value type error");
+        return NULL;
+    }
+
+    if (r < 0 || r >= self->mat->rows ||
+        c < 0 || c >= self->mat->cols){
+            PyErr_SetString(PyExc_IndexError,
+                            "matrix index out of range");
+        return NULL;            
+    }
+
+    set(self->mat, (int)r, (int)c, value);
+
+    Py_RETURN_NONE;
 }
 
 /*
@@ -666,6 +718,48 @@ PyObject *Matrix61c_set_value(Matrix61c *self, PyObject* args) {
  */
 PyObject *Matrix61c_get_value(Matrix61c *self, PyObject* args) {
     /* TODO: YOUR CODE HERE */
+
+    PyObject *row = NULL;
+    PyObject *col = NULL;
+
+    if (!PyArg_UnpackTuple(
+        args,
+        "args",
+        2,
+        2,
+        &row,
+        &col
+    )){
+        PyErr_SetString(PyExc_TypeError,
+                        "get expects two arguments");
+        
+        return NULL;
+    }
+
+    if (!PyLong_Check(row) || !PyLong_Check(col)){
+        PyErr_SetString(PyExc_TypeError,
+                        "row and col must be integers");
+        return NULL;
+    }
+
+    long r = PyLong_AsLong(row);
+    long c = PyLong_AsLong(col);
+
+    if (r < 0 || r >= self->mat->rows ||
+        c < 0 || c >= self->mat->cols){
+            PyErr_SetString(PyExc_IndexError,
+                            "matrix index out of range");
+        return NULL;            
+    }
+
+    double value = get(
+        self->mat,
+        (int)r,
+        (int)c
+    );
+
+    return PyFloat_FromDouble(value);
+
 }
 
 /*
@@ -676,6 +770,18 @@ PyObject *Matrix61c_get_value(Matrix61c *self, PyObject* args) {
  */
 PyMethodDef Matrix61c_methods[] = {
     /* TODO: YOUR CODE HERE */
+    {
+        "set",
+        (PyCFunction)Matrix61c_set_value,
+        METH_VARARGS,
+        "Set a matrix value"
+    },
+    {
+        "get",
+        (PyCFunction)Matrix61c_get_value,
+        METH_VARARGS,
+        "Get a matrix value"
+    },
     {NULL, NULL, 0, NULL}
 };
 
