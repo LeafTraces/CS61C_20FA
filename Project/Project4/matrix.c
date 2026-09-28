@@ -230,15 +230,46 @@ void fill_matrix(matrix *mat, double val) {
  * Return 0 upon success and a nonzero value upon failure.
  */
 int add_matrix(matrix *result, matrix *mat1, matrix *mat2) {
-    size_t k = (size_t) result->rows * (size_t) result->cols;
-    double *result_e = result->data[0];
-    double *mat1_e = mat1->data[0];
-    double *mat2_e = mat2->data[0];
 
-    for (size_t i = 0; i < k; i++){
-        result_e[i] = mat1_e[i] + mat2_e[i];
+    int rows = result->rows;
+    int cols = result->cols;
+    
+    // fast path
+    if (result->parent == NULL &&
+        mat1->parent == NULL &&
+        mat2->parent == NULL){
+
+            size_t k = (size_t) rows * (size_t) cols;
+            double *r = result->data[0];
+            double *a = mat1->data[0];
+            double *b = mat2->data[0];
+
+            size_t i = 0;
+            for (; i + 3 < k; i += 4) {
+                r[i]     = a[i]     + b[i];
+                r[i + 1] = a[i + 1] + b[i + 1];
+                r[i + 2] = a[i + 2] + b[i + 2];
+                r[i + 3] = a[i + 3] + b[i + 3];
+            }
+
+            for (; i < k; i++) {
+                r[i] = a[i] + b[i];
+            }
+
+            return 0;
     }
 
+    // general path
+    for (int i = 0; i < rows; i++){
+
+        double *r = result->data[i];
+        double *a = mat1->data[i];
+        double *b = mat2->data[i];
+
+        for (int j = 0; j < cols; j++){
+            r[j] = a[j] + b[j];
+        }
+    }
     return 0;
 }
 
