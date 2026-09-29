@@ -217,11 +217,35 @@ void fill_matrix(matrix *mat, double val) {
     int rows = mat->rows;
     int cols = mat->cols;
 
-    size_t k = (size_t) rows * (size_t) cols;
+    if (mat->parent == NULL){
+        size_t k = (size_t) rows * (size_t) cols;
 
-    double *element = mat->data[0];
-    for (size_t i = 0; i < k; i++){
-        element[i] = val;
+        double *r = mat->data[0];
+
+        size_t i = 0;
+
+        __m256d vr = _mm256_set1_pd(val);
+
+        for (; i + 3 < k; i+= 4){
+            _mm256_storeu_pd(r + i, vr);
+        }
+
+        for (; i < k; i++){
+            r[i] = val;
+        }
+ 
+        return;
+    }
+    else{
+        for (int i = 0; i < rows; i++){
+            double *r = mat->data[i];
+
+            for (int j = 0; j < cols; j++){
+                r[j] = val;
+            }
+        }
+
+        return;
     }
 }
 
@@ -246,10 +270,13 @@ int add_matrix(matrix *result, matrix *mat1, matrix *mat2) {
 
             size_t i = 0;
             for (; i + 3 < k; i += 4) {
-                r[i]     = a[i]     + b[i];
-                r[i + 1] = a[i + 1] + b[i + 1];
-                r[i + 2] = a[i + 2] + b[i + 2];
-                r[i + 3] = a[i + 3] + b[i + 3];
+                __m256d va = _mm256_loadu_pd(a + i);
+
+                __m256d vb = _mm256_loadu_pd(b + i);
+
+                __m256d vr = _mm256_add_pd(va, vb);
+
+                _mm256_storeu_pd(r + i, vr);
             }
 
             for (; i < k; i++) {
@@ -278,15 +305,49 @@ int add_matrix(matrix *result, matrix *mat1, matrix *mat2) {
  * Return 0 upon success and a nonzero value upon failure.
  */
 int sub_matrix(matrix *result, matrix *mat1, matrix *mat2) {
-    size_t k = (size_t) result->rows * (size_t) result->cols;
-    double *result_e = result->data[0];
-    double *mat1_e = mat1->data[0];
-    double *mat2_e = mat2->data[0];
 
-    for (size_t i = 0; i < k; i++){
-        result_e[i] = mat1_e[i] - mat2_e[i];
-    }
+    int rows = result->rows;
+    int cols = result->cols;
     
+    // fast path
+    if (result->parent == NULL &&
+        mat1->parent == NULL &&
+        mat2->parent == NULL){
+
+            size_t k = (size_t) rows * (size_t) cols;
+            double *r = result->data[0];
+            double *a = mat1->data[0];
+            double *b = mat2->data[0];
+
+            size_t i = 0;
+            for (; i + 3 < k; i += 4) {
+                __m256d va = _mm256_loadu_pd(a + i);
+
+                __m256d vb = _mm256_loadu_pd(b + i);
+
+                __m256d vr = _mm256_sub_pd(va, vb);
+
+                _mm256_storeu_pd(r + i, vr);
+            }
+
+            for (; i < k; i++) {
+                r[i] = a[i] - b[i];
+            }
+
+            return 0;
+    }
+
+    // general path
+    for (int i = 0; i < rows; i++){
+
+        double *r = result->data[i];
+        double *a = mat1->data[i];
+        double *b = mat2->data[i];
+
+        for (int j = 0; j < cols; j++){
+            r[j] = a[j] - b[j];
+        }
+    }
     return 0;
 }
 
@@ -296,16 +357,40 @@ int sub_matrix(matrix *result, matrix *mat1, matrix *mat2) {
  * Remember that matrix multiplication is not the same as multiplying individual elements.
  */
 int mul_matrix(matrix *result, matrix *mat1, matrix *mat2) {
-    for (int i = 0; i < result->rows; i++){
-        for (int j = 0; j < result->cols; j++){
-            double sum = 0;
-            for (int p = 0; p < mat1->cols; p++){
-                sum += mat1->data[i][p] * mat2->data[p][j];
+
+    int m = mat1->rows;
+    int k = mat1->cols;
+    int n = mat2->cols;
+
+    fill_matrix(result, 0.0);
+
+    for (int i = 0; i < m; i++){
+        double *r_row = result->data[i];
+        double *a_row = mat1->data[i];
+
+        for (int p = 0; p < k; p++){
+            
+            double a = a_row[p];
+            double *b_row = mat2->data[p];
+            
+            __m256d va = _mm256_set1_pd(a);
+
+            int j = 0;
+
+            for (; j + 3 < n; j += 4){
+                __m256d vb = _mm256_loadu_pd(b_row + j);
+                __m256d vc = _mm256_loadu_pd(r_row + j);
+
+                vc = _mm256_fmadd_pd(va, vb, vc);
+
+                _mm256_storeu_pd(r_row + j, vc);
             }
-            result->data[i][j] = sum;
+
+            for (; j < n; j++){
+                r_row[j] += a * b_row[j];
+            }
         }
     }
-    
     return 0;
 }
 
@@ -363,12 +448,43 @@ int pow_matrix(matrix *result, matrix *mat, int pow) {
  * Return 0 upon success and a nonzero value upon failure.
  */
 int neg_matrix(matrix *result, matrix *mat) {
-    size_t k = (size_t) result->rows * (size_t) result->cols;
-    double *result_e = result->data[0];
-    double *mat_e = mat->data[0];
 
-    for (size_t i = 0; i < k; i++){
-        result_e[i] = -mat_e[i];
+    int rows = result->rows;
+    int cols = result->cols;
+    
+    // fast path
+    if (result->parent == NULL &&
+        mat->parent == NULL){
+
+            size_t k = (size_t) rows * (size_t) cols;
+            double *r = result->data[0];
+            double *a = mat->data[0];
+            
+            __m256d neg_one = _mm256_set1_pd(-1.0);
+
+            size_t i = 0;
+            for (; i + 3 < k; i += 4) {
+                __m256d va = _mm256_loadu_pd(a + i);
+
+                __m256d vr = _mm256_mul_pd(va, neg_one);
+
+                _mm256_storeu_pd(r + i, vr);
+            }
+
+            for (; i < k; i++) {
+                r[i] = -a[i];
+            }
+
+            return 0;
+    }
+
+    for (int i = 0; i < rows; i++){
+        double *r = result->data[i];
+        double *a = mat->data[i];
+
+        for (int j = 0; j < cols; j++){
+            r[j] = -a[j];
+        }
     }
     
     return 0;
@@ -379,13 +495,45 @@ int neg_matrix(matrix *result, matrix *mat) {
  * Return 0 upon success and a nonzero value upon failure.
  */
 int abs_matrix(matrix *result, matrix *mat) {
-    size_t k = (size_t) result->rows * (size_t) result->cols;
-    double *result_e = result->data[0];
-    double *mat_e = mat->data[0];
 
-    for (size_t i = 0; i < k; i++){
-        result_e[i] = mat_e[i] < 0 ? -mat_e[i] : mat_e[i];
+    int rows = result->rows;
+    int cols = result->cols;
+
+    if (result->parent == NULL && mat->parent == NULL){
+
+        size_t k = (size_t) result->rows * (size_t) result->cols;
+        double *r = result->data[0];
+        double *a = mat->data[0];
+
+        __m256d sign_mask = _mm256_set1_pd(-0.0);
+
+        size_t i = 0;
+
+        for(; i + 3 < k; i += 4){
+            __m256d va = _mm256_loadu_pd(a + i);
+
+            __m256d vr = _mm256_andnot_pd(sign_mask, va);
+
+            _mm256_storeu_pd(r + i, vr);
+        }
+
+        for(; i < k; i++){
+            r[i] = a[i] < 0 ? -a[i] : a[i];
+        }
     }
+    else{
+        for (int i = 0; i < rows; i++) {
+
+            double *r = result->data[i];
+            double *a = mat->data[i];
+
+            for (int j = 0; j < cols; j++) {
+
+                r[j] = a[j] < 0 ? -a[j] : a[j];
+            }
+        }
+    }
+
     
     return 0;
 }
